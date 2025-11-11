@@ -1,16 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb; // Tambahan untuk cek web
+import 'package:sqflite/sqflite.dart'; // Digunakan untuk databaseFactory
+// Pastikan Anda sudah menambahkan sqflite_common_ffi_web ke pubspec.yaml jika target web.
+import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'database_helper.dart';
 import 'models/password.dart';
 
 void main() {
-  runApp(PasswordManagerApp());
+  // Wajib dipanggil untuk memastikan binding widget siap
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // FIX UNTUK WEB: Mengatasi masalah inisialisasi sqflite di Flutter Web.
+  if (kIsWeb) {
+    databaseFactory = databaseFactoryFfiWeb;
+  }
+
+  runApp(const PasswordManagerApp()); // Mengubah ke const
 }
 
 class PasswordManagerApp extends StatelessWidget {
   const PasswordManagerApp({super.key});
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(title: 'Password Manager', home: PasswordListScreen());
+    return const MaterialApp(
+      title: 'Password Manager',
+      home: PasswordListScreen(),
+    ); // Mengubah ke const
   }
 }
 
@@ -23,19 +38,6 @@ class PasswordListScreen extends StatefulWidget {
 class _PasswordListScreenState extends State<PasswordListScreen> {
   final dbHelper = DatabaseHelper();
   List<Password> passwords = [];
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Password List')),
-      body: Center(child: Text('Total Passwords; ${passwords.length}')),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _addOrUpdatePassword(),
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
-
   @override
   void initState() {
     super.initState();
@@ -49,66 +51,134 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
     });
   }
 
-  void _addOrUpdatePassword({Password? passwords}) {
-    final titleController = TextEditingController(text: passwords?.title);
-    final usernameController = TextEditingController(text: passwords?.username);
-    final passwordController = TextEditingController(text: passwords?.password);
+  // Fungsi untuk menghapus password
+  void _deletePassword(int id) async {
+    await dbHelper.deletePassword(id);
+    _refreshPasswordList();
+  }
+
+  // Dialog Tambah/Edit Password (Dibuat terpisah agar lebih bersih)
+  void _addOrUpdatePassword({Password? passwordToEdit}) {
+    final titleController = TextEditingController(text: passwordToEdit?.title);
+    final usernameController = TextEditingController(
+      text: passwordToEdit?.username,
+    );
+    final passwordController = TextEditingController(
+      text: passwordToEdit?.password,
+    );
 
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text(passwords == null ? 'Tambah Password' : 'Edit Password'),
-        // Perbaikan di sini: Tambahkan SingleChildScrollView dan Padding
-        content: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
+      builder: (BuildContext context) {
+        // Gunakan BuildContext dari builder
+        return AlertDialog(
+          title: Text(
+            passwordToEdit == null ? 'Tambah Password' : 'Edit Password',
+          ),
+          content: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: titleController,
+                    decoration: const InputDecoration(labelText: 'Title'),
+                  ),
+                  TextField(
+                    controller: usernameController,
+                    decoration: const InputDecoration(labelText: 'Username'),
+                  ),
+                  TextField(
+                    controller: passwordController,
+                    decoration: const InputDecoration(labelText: 'Password'),
+                    obscureText: true, // Opsional: Sembunyikan password
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              // Mengganti ElevatedButton pertama dengan TextButton agar konsisten dengan dialog modern
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              // lib/main.dart (Hanya perubahan pada fungsi _addOrUpdatePassword di onPressed)
+              onPressed: () async {
+                final newPassword = Password(
+                  id: passwordToEdit?.id,
+                  title: titleController.text,
+                  username: usernameController.text,
+                  password: passwordController.text,
+                );
+
+                if (passwordToEdit == null) {
+                  await dbHelper.insertPassword(newPassword);
+                } else {
+                  await dbHelper.updatePassword(newPassword);
+                }
+
+                // Setelah operasi async selesai, periksa apakah widget ini masih terpasang.
+                if (!mounted) return; // FIX DITAMBAHKAN DI SINI
+
+                _refreshPasswordList();
+              },
+              child: Text(passwordToEdit == null ? 'Tambah' : 'Simpan'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Password Manager'),
+        backgroundColor: Theme.of(
+          context,
+        ).colorScheme.inversePrimary, // Memastikan AppBar memiliki warna
+      ),
+      // MENGGANTI BAGIAN BODY DENGAN TAMPILAN DAFTAR
+      body: ListView.builder(
+        itemCount: passwords.length,
+        itemBuilder: (context, index) {
+          final password = passwords[index];
+          return ListTile(
+            // Tampilan utama
+            title: Text(password.title),
+            subtitle: Text(password.username),
+
+            // Tombol edit dan hapus di sisi kanan (sesuai lampiran)
+            trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(
-                  controller: titleController,
-                  decoration: InputDecoration(labelText: 'Title'),
+                // Tombol Edit (Ikon Pensil)
+                IconButton(
+                  icon: const Icon(Icons.edit, size: 20),
+                  onPressed: () =>
+                      _addOrUpdatePassword(passwordToEdit: password),
                 ),
-                TextField(
-                  controller: usernameController,
-                  decoration: InputDecoration(labelText: 'Username'),
-                ),
-                TextField(
-                  controller: passwordController,
-                  decoration: InputDecoration(labelText: 'Password'),
+                // Tombol Hapus (Ikon Sampah)
+                IconButton(
+                  icon: const Icon(Icons.delete, size: 20),
+                  onPressed: () => _deletePassword(password.id!),
                 ),
               ],
             ),
-          ),
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () async {
-              // Baris yang diawali dengan 'onPressed: () async {'
-              final newPassword = Password(
-                id: passwords?.id,
-                title: titleController.text,
-                username: usernameController.text,
-                password: passwordController.text,
-              );
-              if (passwords == null) {
-                await dbHelper.insertPassword(newPassword);
-              } else {
-                await dbHelper.updatePassword(newPassword);
-              }
-              _refreshPasswordList();
-              // >>> Perbaikan di sini <<<
-              if (mounted) {
-                Navigator.of(context).pop();
-              }
-            },
-            child: Text(passwords == null ? 'Tambah' : 'Simpan'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text('Batal'),
-          ),
-        ],
+            // Opsional: Jika diklik, buka dialog edit juga
+            onTap: () => _addOrUpdatePassword(passwordToEdit: password),
+          );
+        },
+      ),
+      // Floating Action Button
+      floatingActionButton: FloatingActionButton(
+        onPressed: () =>
+            _addOrUpdatePassword(), // Membuka dialog untuk menambah
+        child: const Icon(Icons.add),
       ),
     );
   }
