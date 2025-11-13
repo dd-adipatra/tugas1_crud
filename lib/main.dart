@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb; // Tambahan untuk cek web
-import 'package:sqflite/sqflite.dart'; // Digunakan untuk databaseFactory
-// Pastikan Anda sudah menambahkan sqflite_common_ffi_web ke pubspec.yaml jika target web.
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'database_helper.dart';
 import 'models/password.dart';
@@ -15,17 +14,22 @@ void main() {
     databaseFactory = databaseFactoryFfiWeb;
   }
 
-  runApp(const PasswordManagerApp()); // Mengubah ke const
+  runApp(const PasswordManagerApp());
 }
 
 class PasswordManagerApp extends StatelessWidget {
   const PasswordManagerApp({super.key});
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
       title: 'Password Manager',
-      home: PasswordListScreen(),
-    ); // Mengubah ke const
+      // Menggunakan skema warna yang lebih umum agar AppBar terlihat
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        useMaterial3: true,
+      ),
+      home: const PasswordListScreen(),
+    );
   }
 }
 
@@ -38,6 +42,7 @@ class PasswordListScreen extends StatefulWidget {
 class _PasswordListScreenState extends State<PasswordListScreen> {
   final dbHelper = DatabaseHelper();
   List<Password> passwords = [];
+
   @override
   void initState() {
     super.initState();
@@ -70,8 +75,9 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        // Gunakan BuildContext dari builder
+        // Menggunakan BuildContext dari builder untuk AlertDialog
         return AlertDialog(
+          // Judul berubah menjadi 'Tambah Password' atau 'Edit Password'
           title: Text(
             passwordToEdit == null ? 'Tambah Password' : 'Edit Password',
           ),
@@ -92,7 +98,7 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
                   TextField(
                     controller: passwordController,
                     decoration: const InputDecoration(labelText: 'Password'),
-                    obscureText: true, // Opsional: Sembunyikan password
+                    obscureText: true, // Sembunyikan password
                   ),
                 ],
               ),
@@ -100,13 +106,14 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
           ),
           actions: [
             TextButton(
-              // Mengganti ElevatedButton pertama dengan TextButton agar konsisten dengan dialog modern
+              // Tombol Batal
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Batal'),
             ),
             ElevatedButton(
-              // lib/main.dart (Hanya perubahan pada fungsi _addOrUpdatePassword di onPressed)
+              // Tombol Tambah/Simpan
               onPressed: () async {
+                // Mendapatkan nilai dari controller
                 final newPassword = Password(
                   id: passwordToEdit?.id,
                   title: titleController.text,
@@ -114,6 +121,7 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
                   password: passwordController.text,
                 );
 
+                // Logika Insert atau Update
                 if (passwordToEdit == null) {
                   await dbHelper.insertPassword(newPassword);
                 } else {
@@ -121,8 +129,10 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
                 }
 
                 // Setelah operasi async selesai, periksa apakah widget ini masih terpasang.
-                if (!mounted) return; // FIX DITAMBAHKAN DI SINI
+                if (!mounted) return; // **PERBAIKAN: mounted check**
 
+                // Tutup dialog dan perbarui daftar
+                //Navigator.of(context).pop();
                 _refreshPasswordList();
               },
               child: Text(passwordToEdit == null ? 'Tambah' : 'Simpan'),
@@ -138,9 +148,8 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Password Manager'),
-        backgroundColor: Theme.of(
-          context,
-        ).colorScheme.inversePrimary, // Memastikan AppBar memiliki warna
+        // Warna AppBar menggunakan skema warna tema
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
       // MENGGANTI BAGIAN BODY DENGAN TAMPILAN DAFTAR
       body: ListView.builder(

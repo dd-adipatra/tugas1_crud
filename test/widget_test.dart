@@ -10,20 +10,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tugas1_crud/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
+  testWidgets('FloatingActionButton opens Add Password dialog', (
+    WidgetTester tester,
+  ) async {
     // Build our app and trigger a frame.
     await tester.pumpWidget(const PasswordManagerApp());
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    // Verify that the title of the main screen is visible.
+    expect(find.text('Password Manager'), findsOneWidget);
 
-    // Tap the '+' icon and trigger a frame.
+    // Tap the '+' icon and trigger a frame to open the dialog.
     await tester.tap(find.byIcon(Icons.add));
     await tester.pump();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // Verify that the 'Tambah Password' dialog is shown.
+    expect(find.text('Tambah Password'), findsOneWidget);
+    expect(find.widgetWithText(ElevatedButton, 'Tambah'), findsOneWidget);
+    expect(find.widgetWithText(TextButton, 'Batal'), findsOneWidget);
   });
 }
